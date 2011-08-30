@@ -10,9 +10,22 @@ insn :: String -> String
 insn x = "\n\t" ++ x
 
 gen :: Expr -> String
-gen (Addop l r) = insn "mov rax, " ++ l ++ 
-                  insn "mov rbx, " ++ r ++ 
-                  insn "add rax, rbx"
+gen (Addop l r) = gen l ++ gen r ++
+                  insn "pop eax" ++
+                  insn "pop ebx" ++
+                  insn "add eax, ebx" ++
+                  insn "push eax"
+
+gen (Subop l r) = gen l ++ gen r ++
+                  insn "pop eax" ++
+                  insn "pop ebx" ++
+                  insn "sub eax, ebx" ++
+                  insn "neg eax" ++
+                  insn "push eax"
+
+
+gen (Const x) = insn "mov eax, " ++ (show x) ++
+                insn "push eax"
 
 header :: String
 header = "extern printf\n" ++ 
@@ -22,21 +35,25 @@ header = "extern printf\n" ++
          "segment .text\n\t" ++
          "global main\n" ++
          "main:\n\t" ++
-         "push rbp\n\t" ++
-         "mov rbp, rsp\n"
+         "push ebp\n\t" ++
+         "mov ebp, esp\n"
          
 footer :: String
-footer = "\t" ++
-         "pop rsi\n\t" ++
-         "mov rdi, msg\n\t" ++
+footer = "\n\t" ++
+         "push dword msg\n\t" ++
          "call printf\n\t" ++
-         "add rsp, 8\n\t" ++
-         "mov rax, 0\n\t" ++
-         "leave\n\t" ++
+         "add esp, 8\n\t" ++
+         "mov esp, ebp\n\t" ++
+         "pop ebp\n\t" ++
+         "mov eax, 0\n\t" ++
          "ret"
 
 compile :: String -> String
-compile "" = header ++ gen (Addop (Const 10) (Const 20)) ++ footer
+compile "" = header ++ gen (Subop (Const 100) (Addop (Const 20) (Const 50))) ++ footer
 compile x = header ++ gen (Addop (Const 20) (Const 30)) ++ footer
 
-data Expr = Addop Expr Expr deriving (Show)
+data Expr = Addop Expr Expr 
+          | Subop Expr Expr 
+          | Const Int 
+          deriving (Show)
+
