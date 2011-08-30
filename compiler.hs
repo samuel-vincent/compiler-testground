@@ -9,21 +9,17 @@ main = do
 insn :: String -> String
 insn x = "\n\t" ++ x
 
+binop :: Expr -> Expr -> String -> String
+binop l r cmd = gen l ++ gen r ++
+                insn "pop eax" ++
+                insn "pop ebx" ++
+                insn cmd ++
+                insn "push eax"
+
 gen :: Expr -> String
-gen (Addop l r) = gen l ++ gen r ++
-                  insn "pop eax" ++
-                  insn "pop ebx" ++
-                  insn "add eax, ebx" ++
-                  insn "push eax"
-
-gen (Subop l r) = gen l ++ gen r ++
-                  insn "pop eax" ++
-                  insn "pop ebx" ++
-                  insn "sub eax, ebx" ++
-                  insn "neg eax" ++
-                  insn "push eax"
-
-
+gen (Addop l r) = binop l r "add eax, ebx"
+gen (Subop l r) = binop l r ("sub eax, ebx" ++ insn "neg eax")
+gen (Mulop l r) = binop l r "mul ebx"
 gen (Const x) = insn "mov eax, " ++ (show x) ++
                 insn "push eax"
 
@@ -49,11 +45,16 @@ footer = "\n\t" ++
          "ret"
 
 compile :: String -> String
-compile "" = header ++ gen (Subop (Const 100) (Addop (Const 20) (Const 50))) ++ footer
-compile x = header ++ gen (Addop (Const 20) (Const 30)) ++ footer
+compile _ = header ++ 
+            gen (Subop (Const 100) 
+                 (Addop (Mulop (Const 20) (Const 2)) (Const 50))) ++ 
+            footer
+
+type Term = Int
 
 data Expr = Addop Expr Expr 
           | Subop Expr Expr 
-          | Const Int 
+          | Mulop Expr Expr
+          | Const Term
           deriving (Show)
 
