@@ -26,34 +26,49 @@ binop a l r cmd = gen a l ++ gen a r ++
                 insn cmd ++
                 insn ("push " ++ (ax a))
 
+join :: [String] -> String
+join (s:ss) = s ++ join ss
+join [] = ""
+
 gen :: Architecture -> Expr -> String
 gen a (Addop l r) = binop a l r ("add " ++ (ax a) ++ ", " ++ (bx a))
-gen a (Subop l r) = binop a l r ("sub " ++ (ax a) ++ ", " ++ (bx a) ++ 
-                               insn "neg " ++ (ax a))
+gen a (Subop l r) = binop a l r ("sub " ++ (ax a) ++ ", " ++ (bx a) ++ (insn "neg ") ++ (ax a))
 gen a (Mulop l r) = binop a l r ("mul " ++ (bx a))
-gen a (Const x) = insn "mov " ++ (ax a) ++ ", " ++ (show x) ++
-                  insn ("push " ++ (ax a))
+gen a (Const con) = insn ("mov " ++ (ax a) ++ ", " ++ (show con)) ++ 
+                    insn ("push " ++ (ax a))
+gen a (Variable n) = insn ("mov " ++ (ax a) ++ ", " ++ "[" ++ n ++ "]") ++ 
+                     insn ("push " ++ (ax a))
 
-header :: Architecture -> String
-header (X86_32) = "extern printf\n" ++ 
-                  "segment .data\n\t" ++ 
-                  "msg db \"Result: %i\", 0xA\n" ++
-                  "segment .bss\n" ++ 
-                  "segment .text\n\t" ++
-                  "global main\n" ++
-                  "main:\n\t" ++
-                  "push ebp\n\t" ++
-                  "mov ebp, esp\n"
+gen' :: Architecture -> Stmt -> String
+gen' a (VariableDeclaration n v) = insn (n ++ " db\t" ++ (show v))
+gen' a (Stmts stmts _) = join [(gen' a stmt) | stmt <- stmts]
+
+gen'' :: Architecture -> Stmt -> String
+gen'' a (Stmts _ x) = gen a x
+gen'' a _ = ""
+
+header :: Architecture -> String -> String
+header (X86_32) a = "extern printf\n" ++ 
+                    "segment .data\n\t" ++
+                    a ++ "\n\t" ++
+                    "msg db \"Result: %i\", 0xA\n" ++
+                    "segment .bss\n" ++ 
+                    "segment .text\n\t" ++
+                    "global main\n" ++
+                    "main:\n\t" ++
+                    "push ebp\n\t" ++
+                    "mov ebp, esp\n"
                   
-header (X86_64) = "extern printf\n" ++
-                  "segment .data\n\t" ++
-                  "msg db \"Result: %i\", 0xA\n" ++
-                  "segment .bss\n" ++
-                  "segment .text\n\t" ++
-                  "global main\n" ++
-                  "main:\n\t" ++
-                  "push rbp\n\t" ++
-                  "mov rbp, rsp\n"
+header (X86_64) a = "extern printf\n" ++
+                    "segment .data\n\t" ++
+                    a ++ "\n\t" ++
+                    "msg db \"Result: %i\", 0xA\n" ++
+                    "segment .bss\n" ++
+                    "segment .text\n\t" ++
+                    "global main\n" ++
+                    "main:\n\t" ++
+                    "push rbp\n\t" ++
+                    "mov rbp, rsp\n"
 
 footer :: Architecture -> String
 footer (X86_32) = "\n\t" ++
@@ -75,16 +90,26 @@ footer (X86_64) = "\n\t" ++
                   "ret"
 
 compile :: String -> Architecture -> String
-compile _ a = header a ++ 
-              gen a (Subop (Const 100) 
-                   (Addop (Mulop (Const 20) (Const 2)) (Const 50))) ++ 
-              footer a
+compile _ a = let ast = (Stmts [
+                          (VariableDeclaration "x" 100), 
+                          (VariableDeclaration "y" 200)
+                         ] 
+		         (Subop 
+                          (Variable "x") 
+                          (Addop 
+                           (Mulop (Variable "y") (Const 2)) 
+                           (Const 50))))
+              in (header a (gen' a ast)) ++ (gen'' a ast) ++ footer a
 
 type Term = Int
+
+data Stmt = VariableDeclaration String Term
+          | Stmts [Stmt] Expr
+            deriving Show
 
 data Expr = Addop Expr Expr 
           | Subop Expr Expr 
           | Mulop Expr Expr
           | Const Term
-          deriving (Show)
-
+          | Variable String
+          deriving Show
