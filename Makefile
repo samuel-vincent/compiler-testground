@@ -23,7 +23,7 @@ compile: $(EXEC)
 	nasm -f $(ASM_FMT) -g -F dwarf $<
 
 %: %.o
-	gcc $< -o $@
+	gcc -gdwarf-2 $< -o $@
 
 clean:
 	@rm $(EXEC) $(OBJ) $(SRC) *~ compiler.o compiler.hi compiler

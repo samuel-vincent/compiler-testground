@@ -40,7 +40,7 @@ gen a (Variable n) = insn ("mov " ++ (ax a) ++ ", " ++ "[" ++ n ++ "]") ++
                      insn ("push " ++ (ax a))
 
 gen' :: Architecture -> Stmt -> String
-gen' a (VariableDeclaration n v) = insn (n ++ " db\t" ++ (show v))
+gen' a (VariableDeclaration n v) = insn (n ++ " dd\t" ++ (show v))
 gen' a (Stmts stmts _) = join [(gen' a stmt) | stmt <- stmts]
 
 gen'' :: Architecture -> Stmt -> String
@@ -91,14 +91,14 @@ footer (X86_64) = "\n\t" ++
 
 compile :: String -> Architecture -> String
 compile _ a = let ast = (Stmts [
-                          (VariableDeclaration "x" 100), 
-                          (VariableDeclaration "y" 200)
+                          (VariableDeclaration "x" 2), 
+                          (VariableDeclaration "y" 3)
                          ] 
-		         (Subop 
+		         (Addop 
                           (Variable "x") 
                           (Addop 
-                           (Mulop (Variable "y") (Const 2)) 
-                           (Const 50))))
+                           (Mulop (Variable "y") (Const 4)) 
+                           (Const 5))))
               in (header a (gen' a ast)) ++ (gen'' a ast) ++ footer a
 
 type Term = Int
