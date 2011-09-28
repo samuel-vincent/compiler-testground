@@ -1,0 +1,15 @@
+
+gentest.exe : gen.obj fn.obj
+	cl gen.obj fn.obj
+
+gen.exe : gen.obj
+	cl gen.obj
+
+gen.obj : gen.cpp
+	cl /c gen.cpp /EHsc /W1 /FAc
+
+fn.obj : fn.asm
+       ml64 /c fn.asm /Fl /Sa
+
+clean: 
+       del *.obj *.exe *.cod
