@@ -2,111 +2,119 @@
 module Parser1 where
 import Data.Char
 
--- Parser type
 newtype Ps a = P ([Char] -> Maybe (a, [Char]))
 
--- Evaluate parser
 parse :: Ps a -> ([Char] -> Maybe (a, [Char]))
 parse (P p) inp = p inp
 
--- Parse single char
-char :: Ps Char
-char = P (\inp -> case inp of (c:cs) -> Just (c, cs)
-                              [] -> Nothing)
+infix 9 #
+infix 8 -#
+infix 7 #-
+infix 6 ?
+infix 5 #>
+infixl 4 <>
 
--- Test parsing result
+instance Monad Ps where
+  p >>= fn = P (\inp -> case parse p inp 
+                        of Just (v, cs) -> parse (fn v) cs
+                           Nothing -> Nothing)
+  return v = P (\inp -> Just (v, inp))
+
 (?) :: Ps a -> (a -> Bool) -> Ps a
-p ? fn = P (\inp -> case parse p inp of Just (v, cs) -> if fn v then Just (v, cs)
-                                                        else Nothing
-                                        _ -> Nothing)
+p ? fn = P (\inp -> case parse p inp 
+                    of Just (v, cs) -> if fn v then Just (v, cs)
+                                       else Nothing
+                       Nothing -> Nothing)
 
-unit :: a -> Ps a
-unit a = P (\inp -> Just (a, inp))
-
--- Match char
-lit :: Char -> Ps Char
-lit v = char ? (==v)
-
--- Join parsing results
 (#) :: Ps a -> Ps b -> Ps (a, b)
 p1 # p2 = P (\inp -> case parse p1 inp of 
                 Just (v1, cs) -> 
                   case parse p2 cs of 
                     Just (v2, cs') -> Just ((v1, v2), cs')
-                    _ -> Nothing
-                _ -> Nothing)
+                    Nothing -> Nothing
+                Nothing -> Nothing)
 
--- Change type of result
 (#>) :: Ps a -> (a -> b) -> Ps b
-p #> fn = P (\inp -> case parse p inp of Just (v, cs) -> Just (fn v, cs)
-                                         _ -> Nothing)
+p #> fn = P (\inp -> case parse p inp 
+                     of Just (v, cs) -> Just (fn v, cs)
+                        Nothing -> Nothing)
 
--- Or
 (<>) :: Ps a -> Ps a -> Ps a 
-p1 <> p2 = P (\inp -> case parse p1 inp of Just (v, cs) -> Just (v, cs)  
-                                           _ -> parse p2 inp)
+p1 <> p2 = P (\inp -> case parse p1 inp 
+                      of Just (v, cs) -> Just (v, cs)  
+                         Nothing -> parse p2 inp)
 
--- Iterate parser n times and join results to list
-iter :: Int -> Ps a -> Ps [a]
-iter n p | n > 0 = (p # iter (n - 1) p) #> cons
-         | otherwise = unit []
-
--- Join results to list while parser succeeds
-while :: Ps a -> Ps [a]
-while p = ((p # while p) #> cons) <> unit []
-
--- Match number
-num :: Ps Char
-num = char ? isNumber
-
--- Match word
-match :: [Char] -> Ps [Char]
-match w = (iter (length w) char) ? (==w)
-
--- Construct list 
-cons :: (a, [a]) -> [a]
-cons (a, as) = a:as
-
-toInt :: String -> Int
-toInt v = read v :: Int 
-
--- Parse number
-number :: Ps Int
-number = (while num) #> toInt
-
--- Not parsers
-whileNot :: Char -> Ps [Char]
-whileNot a = while (char ? (/=a))
-
--- Space
-notSpace :: Ps Char
-notSpace = char ? (\inp -> not $ isSpace inp)
-
--- Match word until whitespace
-word :: Ps [Char]
-word = while notSpace
-
--- Pass whitespace
-passSpace :: Ps [Char]
-passSpace = while (char ? isSpace)
-
--- Pass first parser and accept second
 (-#) :: Ps a -> Ps b -> Ps b
-p1 -# p2 = P (\inp -> case parse p1 inp of Just (c, cs) -> parse p2 cs 
-                                           _ -> Nothing)
+p1 -# p2 = P (\inp -> case parse p1 inp 
+                      of Just (c, cs) -> parse p2 cs 
+                         Nothing -> Nothing)
 
--- Opposite
 (#-) :: Ps a -> Ps b -> Ps a
 p1 #- p2 = P (\inp -> case parse p1 inp 
                       of Just (c, cs) -> 
                            case parse p2 cs 
                            of Nothing -> Nothing
                               Just (c', cs') -> Just (c, cs')
-                         _ -> Nothing)
+                         Nothing -> Nothing)
 
-data Stmt = Module String 
-          | Declare String
-          | Assign String
+nothing :: Ps a
+nothing = P (\_ -> Nothing)
+
+char :: Ps Char
+char = P (\inp -> case inp of (c:cs) -> Just (c, cs)
+                              [] -> Nothing)
+
+lit :: Char -> Ps Char
+lit v = char ? (==v)
+
+iter :: Int -> Ps a -> Ps [a]
+iter n p | n > 0 = p # iter (n - 1) p #> cons
+         | otherwise = return []
+
+while :: Ps a -> Ps [a]
+while p = p # while p #> cons <> return []
+
+match :: [Char] -> Ps [Char]
+match w = iter (length w) char ? (==w)
+
+cons :: (a, [a]) -> [a]
+cons (a, as) = a:as
+
+toInt :: String -> Int
+toInt v = read v :: Int 
+
+number :: Ps Int
+number = while (char ? isNumber) 
+         >>= (\inp -> case inp 
+                      of [] -> nothing
+                         val -> return (toInt val))
+
+whileNot :: Char -> Ps [Char]
+whileNot a = while (char ? (/=a))
+
+alphaNum :: Ps Char
+alphaNum = char ? isAlphaNum
+
+word :: Ps [Char]
+word = while alphaNum
+
+token :: Ps [Char]
+token = skipSpace -# word #- skipSpace
+
+skipSpace :: Ps [Char]
+skipSpace = while (char ? isSpace)
+
+matchToken :: [Char] -> Ps [Char]
+matchToken w = skipSpace -# match w #- skipSpace
+
+data Type = IntT
+          | CharT
+          | ArrayT Type
+          deriving Show
+
+data Stmt = Module String [Stmt] 
+          | Declare Type String 
+          | Assign String Expr
           deriving Show
 
 data Expr = Addop Expr Expr
@@ -115,22 +123,36 @@ data Expr = Addop Expr Expr
           | Var [Char] 
           deriving Show
 
-var' = word #> Var
+var = word #> Var
 
-num' = number #> ConstNum  
+num = number #> ConstNum  
 
-term' = num' <> ((lit '(' -# var') #- lit ')')
+term = num 
+       <> lit '(' -# var #- lit ')'
 
-mulop' (a, b) = Mulop a b
+factor = (term #- lit '*') # factor #> (\(a, b) -> Mulop a b) 
+         <> term
 
-addop' (a, b) = Addop a b
+expr = (factor #- lit '+') # expr #> (\(a, b) -> Addop a b) 
+       <> factor
 
-factor' = (((term' #- lit '*') # factor') #> mulop') <> term'
+parseType' = matchToken "int" #> (\_ -> IntT) 
+             <> matchToken "char" #> (\_ -> CharT)
 
-expr' = (((factor' #- lit '+') # expr') #> addop') <> factor'
+parseType = parseType' #- matchToken "[]" #> ArrayT  
+            <> parseType'
 
--- **************
+declare = parseType # word #> (\(a, b) -> Declare a b)
 
-main = (((match "module") # passSpace) -# word) #> Module
+assign = (token #- matchToken "=") # num #> (\(a, b) -> Assign a b)
 
-expr = expr' #- (lit ';')
+startModule = matchToken "start" -# token
+
+endModule m = matchToken "end" -# token ? (==m)
+
+stmt = (declare <> assign) #- matchToken ";"
+
+stmts = while stmt
+
+parseModule = (startModule # stmts) 
+              >>= (\(m, sts) -> endModule m -# return (Module m sts))
