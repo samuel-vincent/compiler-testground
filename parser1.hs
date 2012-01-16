@@ -84,7 +84,7 @@ toInt :: String -> Int
 toInt v = read v :: Int 
 
 number :: Ps Int
-number = while (char ? isNumber) 
+number = skipSpace -# while (char ? isNumber) #- skipSpace
          >>= (\inp -> case inp 
                       of [] -> nothing
                          val -> return (toInt val))
@@ -109,12 +109,14 @@ matchToken w = skipSpace -# match w #- skipSpace
 
 data Type = IntT
           | CharT
+          | BoolT
           | ArrayT Type
           deriving Show
 
 data Stmt = Module String [Stmt] 
           | Declare Type String 
           | Assign String Expr
+          | If Expr Stmt
           deriving Show
 
 data Expr = Addop Expr Expr
@@ -127,8 +129,8 @@ var = word #> Var
 
 num = number #> ConstNum  
 
-term = num 
-       <> lit '(' -# var #- lit ')'
+term = num
+       <> matchToken "(" -# var #- matchToken ")"
 
 factor = (term #- lit '*') # factor #> (\(a, b) -> Mulop a b) 
          <> term
@@ -138,13 +140,14 @@ expr = (factor #- lit '+') # expr #> (\(a, b) -> Addop a b)
 
 parseType' = matchToken "int" #> (\_ -> IntT) 
              <> matchToken "char" #> (\_ -> CharT)
+             <> matchToken "bool" #> (\_ -> BoolT)
 
 parseType = parseType' #- matchToken "[]" #> ArrayT  
             <> parseType'
 
 declare = parseType # word #> (\(a, b) -> Declare a b)
 
-assign = (token #- matchToken "=") # num #> (\(a, b) -> Assign a b)
+assign = (token #- matchToken "=") # expr #> (\(a, b) -> Assign a b)
 
 startModule = matchToken "start" -# token
 
