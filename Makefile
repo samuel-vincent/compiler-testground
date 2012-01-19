@@ -15,7 +15,7 @@ endif
 
 compiler: compiler.hs
 	ghc --make compiler
-	./compiler "./test.asm" "" $(ARCH)
+	./compiler "./test.asm" "start Test1 int a = 100; a = a + 300; a = 200; end Test1" $(ARCH)
 
 compile: $(EXEC)
 

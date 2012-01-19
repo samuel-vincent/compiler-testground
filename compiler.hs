@@ -1,5 +1,6 @@
 
-import System(getArgs)
+import System (getArgs)
+import Parser1
 
 main :: IO ()
 main = do
@@ -34,18 +35,26 @@ gen :: Architecture -> Expr -> String
 gen a (Addop l r) = binop a l r ("add " ++ (ax a) ++ ", " ++ (bx a))
 gen a (Subop l r) = binop a l r ("sub " ++ (ax a) ++ ", " ++ (bx a) ++ (insn "neg ") ++ (ax a))
 gen a (Mulop l r) = binop a l r ("mul " ++ (bx a))
-gen a (Const con) = insn ("mov " ++ (ax a) ++ ", " ++ (show con)) ++ 
+gen a (ConstNum con) = insn ("mov " ++ (ax a) ++ ", " ++ (show con)) ++ 
                     insn ("push " ++ (ax a))
-gen a (Variable n) = insn ("mov " ++ (ax a) ++ ", " ++ "[" ++ n ++ "]") ++ 
+gen a (Var n) = insn ("mov " ++ (ax a) ++ ", " ++ "[" ++ n ++ "]") ++ 
                      insn ("push " ++ (ax a))
+gen _ _ = ""
+
+gen'' a (Module _ stmts) = gs' a stmts
+gen'' a (Assign n expr) = gen a expr
+gen'' _ _ = ""
 
 gen' :: Architecture -> Stmt -> String
-gen' a (VariableDeclaration n v) = insn (n ++ " dd\t" ++ (show v))
-gen' a (Stmts stmts _) = join [(gen' a stmt) | stmt <- stmts]
+gen' a (Module _ stmts) = gs a stmts
+gen' a (DeclareAndAssign _ n v) = insn (n ++ " dd\t" ++ (showVal v))
+gen' _ _ = ""
 
-gen'' :: Architecture -> Stmt -> String
-gen'' a (Stmts _ x) = gen a x
-gen'' a _ = ""
+showVal (ConstNum n) = show n
+showVal _ = ""
+
+gs a (Stmts stmts) = join [(gen' a stmt) | stmt <- stmts]
+gs' a (Stmts stmts) = join [(gen'' a stmt) | stmt <- stmts]
 
 header :: Architecture -> String -> String
 header (X86_32) a = "extern printf\n" ++ 
@@ -90,26 +99,6 @@ footer (X86_64) = "\n\t" ++
                   "ret"
 
 compile :: String -> Architecture -> String
-compile _ a = let ast = (Stmts [
-                          (VariableDeclaration "x" 2), 
-                          (VariableDeclaration "y" 3)
-                         ] 
-		         (Addop 
-                          (Variable "x") 
-                          (Addop 
-                           (Mulop (Variable "y") (Const 4)) 
-                           (Const 5))))
-              in (header a (gen' a ast)) ++ (gen'' a ast) ++ footer a
-
-type Term = Int
-
-data Stmt = VariableDeclaration String Term
-          | Stmts [Stmt] Expr
-            deriving Show
-
-data Expr = Addop Expr Expr 
-          | Subop Expr Expr 
-          | Mulop Expr Expr
-          | Const Term
-          | Variable String
-          deriving Show
+compile s a = let ast = parse parseModule s
+              in case ast of Nothing -> ""
+                             Just (as, cs) -> (header a (gen' a as)) ++ (gen'' a as) ++ footer a

@@ -1,6 +1,7 @@
 
 module Parser1 where
 import Data.Char
+import Data.List
 
 newtype Ps a = P ([Char] -> Maybe (a, [Char]))
 
@@ -113,14 +114,20 @@ data Type = IntT
           | ArrayT Type
           deriving Show
 
-data Stmt = Module String [Stmt] 
+data Stmts = Stmts [Stmt] deriving Show
+
+data Stmt = Module String Stmts
           | Declare Type String 
           | Assign String Expr
+          | DeclareAndAssign Type String Expr
           | If Expr [Stmt]
+          | While Expr [Stmt]
           deriving Show
 
 data Expr = Addop Expr Expr
           | Mulop Expr Expr
+          | Subop Expr Expr
+          | Divop Expr Expr
           | ConstNum Int  
           | Var [Char] 
           | Eql Expr Expr 
@@ -135,13 +142,20 @@ data Expr = Addop Expr Expr
           | FalseConst 
           deriving Show
 
-var = word #> Var
+contains :: [Char] -> [[Char]] -> Bool
+contains v ws = case find (==v) ws of Nothing -> False 
+                                      _ -> True
+
+reserved = ["if", "while", "true", "false", "int", "bool", "char", "start", "end"]
+
+var = token ? (\inp -> (inp /="") && (not (contains inp reserved))) #> Var 
 
 num = number #> ConstNum  
 
 term = num 
        <> bool
        <> matchToken "(" -# var #- matchToken ")"
+       <> var
 
 factor = (term #- lit '*') # factor #> (\(a, b) -> Mulop a b) 
          <> term
@@ -150,37 +164,36 @@ expr = (factor #- lit '+') # expr #> (\(a, b) -> Addop a b)
        <> factor
 
 true = matchToken "true" #> (\_ -> TrueConst)
-
 false = matchToken "false" #> (\_ -> FalseConst)
-
 bool = true <> false
 
 lt = (expr #- matchToken "<") # rel #> (\(a, b) -> Lt a b)
 gt = (expr #- matchToken ">") # rel #> (\(a, b) -> Gt a b)
 ge = (expr #- matchToken ">=") # rel #> (\(a, b) -> Ge a b)
 le = (expr #- matchToken "<=") # rel #> (\(a, b) -> Le a b)
-
 rel = lt <> gt <> ge <> le <> expr
 
 eq = (rel #- matchToken "==") # eql #> (\(a, b) -> Eql a b)
 neq = (rel #- matchToken "!=") # eql #> (\(a, b) -> Neql a b)
-
 eql = eq <> neq <> rel
 
 or' = (eql #- matchToken "||") # or' #> (\(a, b) -> Or a b) <> eql
-
 and' = (or' #- matchToken "&&") # and' #> (\(a, b) -> And a b) <> or'
 
 parseType' = matchToken "int" #> (\_ -> IntT) 
              <> matchToken "char" #> (\_ -> CharT)
              <> matchToken "bool" #> (\_ -> BoolT)
 
-parseType = parseType' #- matchToken "[]" #> ArrayT  
+parseType = parseType' #- matchToken "[]" #> ArrayT 
             <> parseType'
 
-declare = parseType # word #> (\(a, b) -> Declare a b)
+declare = (parseType # word #> (\(a, b) -> Declare a b)) #- matchToken ";"
 
-assign = (token #- matchToken "=") # expr #> (\(a, b) -> Assign a b)
+assign = ((token #- matchToken "=") # expr #> (\(a, b) -> Assign a b)) #- matchToken ";"
+
+declareAndAssign = ((parseType # (token #- matchToken "=")) 
+                   # expr #> (\((a, b), c) -> DeclareAndAssign a b c)) #- matchToken ";"
+
 
 startModule = matchToken "start" -# token
 
@@ -190,9 +203,13 @@ if' = ((matchToken "if" # matchToken "(")
       -# and' # ((matchToken ")" # matchToken "{") -# stmts #- matchToken "}"))
       #> (\(a, b) -> If a b)
 
-stmt = (declare <> assign <> if') #- matchToken ";"
+while' = ((matchToken "while" # matchToken "(") 
+      -# and' # ((matchToken ")" # matchToken "{") -# stmts #- matchToken "}"))
+      #> (\(a, b) -> While a b)
+
+stmt = (declare <> assign <> if' <> while' <> declareAndAssign)
 
 stmts = while stmt
 
 parseModule = (startModule # stmts) 
-              >>= (\(m, sts) -> endModule m -# return (Module m sts))
+              >>= (\(m, sts) -> endModule m -# return (Module m (Stmts sts)))
