@@ -116,20 +116,31 @@ data Type = IntT
 data Stmt = Module String [Stmt] 
           | Declare Type String 
           | Assign String Expr
-          | If Expr Stmt
+          | If Expr [Stmt]
           deriving Show
 
 data Expr = Addop Expr Expr
           | Mulop Expr Expr
           | ConstNum Int  
           | Var [Char] 
+          | Eql Expr Expr 
+          | Neql Expr Expr 
+          | Lt Expr Expr 
+          | Gt Expr Expr 
+          | Ge Expr Expr 
+          | Le Expr Expr 
+          | Or Expr Expr
+          | And Expr Expr
+          | TrueConst
+          | FalseConst 
           deriving Show
 
 var = word #> Var
 
 num = number #> ConstNum  
 
-term = num
+term = num 
+       <> bool
        <> matchToken "(" -# var #- matchToken ")"
 
 factor = (term #- lit '*') # factor #> (\(a, b) -> Mulop a b) 
@@ -137,6 +148,28 @@ factor = (term #- lit '*') # factor #> (\(a, b) -> Mulop a b)
 
 expr = (factor #- lit '+') # expr #> (\(a, b) -> Addop a b) 
        <> factor
+
+true = matchToken "true" #> (\_ -> TrueConst)
+
+false = matchToken "false" #> (\_ -> FalseConst)
+
+bool = true <> false
+
+lt = (expr #- matchToken "<") # rel #> (\(a, b) -> Lt a b)
+gt = (expr #- matchToken ">") # rel #> (\(a, b) -> Gt a b)
+ge = (expr #- matchToken ">=") # rel #> (\(a, b) -> Ge a b)
+le = (expr #- matchToken "<=") # rel #> (\(a, b) -> Le a b)
+
+rel = lt <> gt <> ge <> le <> expr
+
+eq = (rel #- matchToken "==") # eql #> (\(a, b) -> Eql a b)
+neq = (rel #- matchToken "!=") # eql #> (\(a, b) -> Neql a b)
+
+eql = eq <> neq <> rel
+
+or' = (eql #- matchToken "||") # or' #> (\(a, b) -> Or a b) <> eql
+
+and' = (or' #- matchToken "&&") # and' #> (\(a, b) -> And a b) <> or'
 
 parseType' = matchToken "int" #> (\_ -> IntT) 
              <> matchToken "char" #> (\_ -> CharT)
@@ -153,7 +186,11 @@ startModule = matchToken "start" -# token
 
 endModule m = matchToken "end" -# token ? (==m)
 
-stmt = (declare <> assign) #- matchToken ";"
+if' = ((matchToken "if" # matchToken "(") 
+      -# and' # ((matchToken ")" # matchToken "{") -# stmts #- matchToken "}"))
+      #> (\(a, b) -> If a b)
+
+stmt = (declare <> assign <> if') #- matchToken ";"
 
 stmts = while stmt
 

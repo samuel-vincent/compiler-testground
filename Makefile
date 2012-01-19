@@ -25,5 +25,8 @@ compile: $(EXEC)
 %: %.o
 	gcc -gdwarf-2 $< -o $@
 
+parser_types: parser_types.cpp
+	g++ $< -o $@
+
 clean:
 	@rm $(EXEC) $(OBJ) $(SRC) *~ compiler.o compiler.hi compiler
