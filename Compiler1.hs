@@ -1,4 +1,3 @@
-
 import System (getArgs)
 import Parser1
 

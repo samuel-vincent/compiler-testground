@@ -13,20 +13,22 @@ else
 	ARCH="x86-32"
 endif
 
-compiler: compiler.hs
-	ghc --make compiler
-	./compiler "./test.asm" "start Test1 int a = 100; a = a + 300; a = 200; end Test1" $(ARCH)
+#test: x64.asm
+#	nasm -f elf64 x64.asm -o x64
+#	gcc x64.o -o x64
+
+Compiler1: Compiler1.hs
+	ghc --make Compiler1
+	./Compiler1 "./test.asm" "start Test1 int a = 100; a = a + 300; end Test1" $(ARCH)
 
 compile: $(EXEC)
 
 %.o: %.asm
-	nasm -f $(ASM_FMT) -g -F dwarf $<
+	nasm -f $(ASM_FMT) -g -F dwarf -l $@.lst $<
 
 %: %.o
 	gcc -gdwarf-2 $< -o $@
 
-parser_types: parser_types.cpp
-	g++ $< -o $@
-
+.PHONY: clean
 clean:
-	@rm $(EXEC) $(OBJ) $(SRC) *~ compiler.o compiler.hi compiler
+	@rm $(EXEC) $(SRC) *.hi *.o *.lst Compiler1
