@@ -11,17 +11,14 @@ segment .text
 	global main
 		
 main:
-	push rbp
-	mov rbp, rsp
-
+	enter 16,0
+	
 	mov rax, [a]
 	push rax
 	pop rsi
 	mov rdi, msg
 	
 	call printf
-		
-	add rsp, 8
-	xor rax, rax
+	
 	leave
 	ret
