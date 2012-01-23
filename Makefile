@@ -13,11 +13,6 @@ else
 	ARCH="x86-32"
 endif
 
-test: x64.nasm
-	nasm -f elf64 x64.nasm
-	gcc x64.o -o x64
-	./x64
-
 Compiler1: Compiler1.hs
 	ghc --make Compiler1
 	./Compiler1 "./test.asm" "start Test1 int a = 100; a = a + 300; end Test1" $(ARCH)
@@ -29,6 +24,11 @@ compile: $(EXEC)
 
 %: %.o
 	gcc -gdwarf-2 $< -o $@
+
+test: x64.nasm
+	nasm -f elf64 x64.nasm
+	gcc x64.o -o x64
+	./x64
 
 .PHONY: clean
 clean:

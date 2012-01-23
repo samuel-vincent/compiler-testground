@@ -1,6 +1,57 @@
 import System (getArgs)
 import Parser1
 
+-- Environment type (represents scope, holds symbol table)
+
+type Name = [Char]
+data Variable = Variable Type Name Expr deriving Show
+data Entry = Entry String Variable deriving Show
+data Env = Env [Entry] Env | Empty deriving Show
+
+put :: Env -> Entry -> Env
+put _ _ = undefined
+
+get :: Env -> String -> Entry
+get _ _ = undefined
+
+-- Generated code
+
+data Section = Data | Bss | Text deriving Show
+data Code = Nop | Code String Section deriving Show
+data Gen = Gen [(Section, String)] deriving Show
+
+putCode :: Gen -> Code -> Gen
+putCode _ _ = undefined
+
+getCode :: Gen -> Section -> String
+getCode _ = undefined
+
+-- Context (environment and generated code)
+
+data Context = Ctx { e :: Env 
+                   , g :: Gen 
+                   } deriving Show
+
+-- Code generator type
+
+data Gn a = Gn (Context -> a -> (Code, Context))
+
+emit :: Gn t -> Context -> t -> (Code, Context)
+emit (Gn fn) = fn
+
+gDecl :: Gn Stmt
+gDecl = Gn (\ctx v -> case v 
+                      of (Declare t n) -> (Code (n ++ "\tresd\t1") Bss, ctx)
+                         _ -> (Nop, ctx))
+
+gDeclAndAssign :: Gn Stmt
+gDeclAndAssign = Gn (\env v -> case v 
+                               of (Declare t n) -> (Code (n ++ "\tresd\t1") Bss, env)
+                                  _ -> (Nop, env))
+
+  
+-- Old code
+
 main :: IO ()
 main = do
   (f:src:platform:[]) <- getArgs

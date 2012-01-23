@@ -3,10 +3,58 @@ module Parser1 where
 import Data.Char
 import Data.List
 
+-- Parser type
+
 newtype Ps a = P ([Char] -> Maybe (a, [Char]))
+
+instance Monad Ps where
+  p >>= fn = P (\inp -> case parse p inp 
+                        of Just (v, cs) -> parse (fn v) cs
+                           Nothing -> Nothing)
+  return v = P (\inp -> Just (v, inp))
+
+-- Unwrap function from monad
 
 parse :: Ps a -> ([Char] -> Maybe (a, [Char]))
 parse (P p) inp = p inp
+
+-- AST structure
+
+data Type = IntT
+          | CharT
+          | BoolT
+          | ArrayT Type
+          deriving Show
+
+data Stmts = Stmts [Stmt] deriving Show
+
+data Stmt = Module String Stmts
+          | Declare Type String 
+          | Assign String Expr
+          | DeclareAndAssign Type String Expr
+          | If Expr [Stmt]
+          | While Expr [Stmt]
+          deriving Show
+
+data Expr = Addop Expr Expr
+          | Mulop Expr Expr
+          | Subop Expr Expr
+          | Divop Expr Expr
+          | ConstNum Int  
+          | Var [Char] 
+          | Eql Expr Expr 
+          | Neql Expr Expr 
+          | Lt Expr Expr 
+          | Gt Expr Expr 
+          | Ge Expr Expr 
+          | Le Expr Expr 
+          | Or Expr Expr
+          | And Expr Expr
+          | TrueConst
+          | FalseConst 
+          deriving Show
+
+-- Combinators
 
 infix 9 #
 infix 8 -#
@@ -14,12 +62,6 @@ infix 7 #-
 infix 6 ?
 infix 5 #>
 infixl 4 <>
-
-instance Monad Ps where
-  p >>= fn = P (\inp -> case parse p inp 
-                        of Just (v, cs) -> parse (fn v) cs
-                           Nothing -> Nothing)
-  return v = P (\inp -> Just (v, inp))
 
 (?) :: Ps a -> (a -> Bool) -> Ps a
 p ? fn = P (\inp -> case parse p inp 
@@ -57,6 +99,8 @@ p1 #- p2 = P (\inp -> case parse p1 inp
                            of Nothing -> Nothing
                               Just (c', cs') -> Just (c, cs')
                          Nothing -> Nothing)
+
+-- Parsers
 
 nothing :: Ps a
 nothing = P (\_ -> Nothing)
@@ -107,40 +151,6 @@ skipSpace = while (char ? isSpace)
 
 matchToken :: [Char] -> Ps [Char]
 matchToken w = skipSpace -# match w #- skipSpace
-
-data Type = IntT
-          | CharT
-          | BoolT
-          | ArrayT Type
-          deriving Show
-
-data Stmts = Stmts [Stmt] deriving Show
-
-data Stmt = Module String Stmts
-          | Declare Type String 
-          | Assign String Expr
-          | DeclareAndAssign Type String Expr
-          | If Expr [Stmt]
-          | While Expr [Stmt]
-          deriving Show
-
-data Expr = Addop Expr Expr
-          | Mulop Expr Expr
-          | Subop Expr Expr
-          | Divop Expr Expr
-          | ConstNum Int  
-          | Var [Char] 
-          | Eql Expr Expr 
-          | Neql Expr Expr 
-          | Lt Expr Expr 
-          | Gt Expr Expr 
-          | Ge Expr Expr 
-          | Le Expr Expr 
-          | Or Expr Expr
-          | And Expr Expr
-          | TrueConst
-          | FalseConst 
-          deriving Show
 
 contains :: [Char] -> [[Char]] -> Bool
 contains v ws = case find (==v) ws of Nothing -> False 
@@ -193,7 +203,6 @@ assign = ((token #- matchToken "=") # expr #> (\(a, b) -> Assign a b)) #- matchT
 
 declareAndAssign = ((parseType # (token #- matchToken "=")) 
                    # expr #> (\((a, b), c) -> DeclareAndAssign a b c)) #- matchToken ";"
-
 
 startModule = matchToken "start" -# token
 
