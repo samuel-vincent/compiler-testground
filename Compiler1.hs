@@ -4,27 +4,45 @@ import Parser1
 -- Environment type (represents scope, holds symbol table)
 
 type Name = [Char]
-data Variable = Variable Type Name Expr deriving Show
-data Entry = Entry String Variable deriving Show
-data Env = Env [Entry] Env | Empty deriving Show
+data Variable = Variable {
+      typ :: Type
+    , expr :: Expr
+    } deriving Show
+data Entry = Entry {
+      name :: String 
+    , var :: Variable 
+    } deriving Show
+data Env = Env {
+      entries :: [Entry] 
+    , parent :: Env
+    } | Empty deriving Show
 
 put :: Env -> Entry -> Env
-put _ _ = undefined
+put (Env entries parent) entry = Env (entry : entries) parent
+put Empty _ = Empty
 
 get :: Env -> String -> Entry
-get _ _ = undefined
+get (Env entries parent) s = head [ x | x <- entries, (name x) == s ]
 
 -- Generated code
 
-data Section = Data | Bss | Text deriving Show
-data Code = Nop | Code String Section deriving Show
-data Gen = Gen [(Section, String)] deriving Show
+data Section = Data | Bss | Text deriving (Show, Eq)
+data Code = Code {
+      code :: String 
+    , section :: Section 
+    } | Nop deriving Show
+data Gen = Gen [Code] deriving Show
 
+-- TODO: refactor this ugly mess
 putCode :: Gen -> Code -> Gen
-putCode _ _ = undefined
+putCode (Gen sects) cd = 
+    let 
+        sect = head [ x | x <- sects, (section x) == (section cd)] 
+        rest = [ x | x <- sects, (section x) /= (section cd)] 
+    in Gen ((Code ((code sect) ++ (code cd)) (section sect)) : rest)
 
 getCode :: Gen -> Section -> String
-getCode _ = undefined
+getCode (Gen sects) sect = (code (head [ x | x <- sects, (section x) == sect]))
 
 -- Context (environment and generated code)
 
@@ -48,7 +66,6 @@ gDeclAndAssign :: Gn Stmt
 gDeclAndAssign = Gn (\env v -> case v 
                                of (Declare t n) -> (Code (n ++ "\tresd\t1") Bss, env)
                                   _ -> (Nop, env))
-
   
 -- Old code
 
